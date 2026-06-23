@@ -52,7 +52,7 @@ param(
     [int]    $MaxLen        = 400,
     [switch] $ShowThinking,
     [switch] $Raw,
-    [string] $ProjectsRoot  = (Join-Path $HOME '.claude\projects')
+    [string] $ProjectsRoot  = (Join-Path $HOME '.claude' 'projects')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -84,6 +84,15 @@ Write-Host "Watching: $targetFile" -ForegroundColor Cyan
 Write-Host "Project dir: $projectDir" -ForegroundColor DarkGray
 Write-Host "(Ctrl+C to stop. New .jsonl files in this dir will be picked up automatically.)" -ForegroundColor DarkGray
 Write-Host ""
+
+# True if $Path is a .jsonl file sitting directly in $projectDir. Compares the
+# parent directory rather than glob-matching with a hardcoded separator, so it
+# works whether the OS reports paths with \ (Windows) or / (macOS/Linux).
+function Test-IsProjectJsonl {
+    param([string]$Path)
+    if ([System.IO.Path]::GetExtension($Path) -ne '.jsonl') { return $false }
+    return ((Split-Path $Path -Parent) -eq $projectDir)
+}
 
 # --- Pretty-printer ---------------------------------------------------------
 
@@ -248,7 +257,7 @@ try {
         while ($changedQueue.TryDequeue([ref]$path)) { $changed[$path] = $true }
         foreach ($p in $changed.Keys) {
             if ($script:Streams.ContainsKey($p)) { Drain-Stream $p }
-            elseif ($p -like "$projectDir\*.jsonl") {
+            elseif ((Test-IsProjectJsonl $p)) {
                 # First time we've seen this file — treat as runtime discovery
                 # (e.g. a Changed event arrived before the Created event)
                 Open-Stream $p -RuntimeDiscovery
@@ -258,7 +267,7 @@ try {
         # Drain create queue
         $created = $null
         while ($createdQueue.TryDequeue([ref]$created)) {
-            if ($created -like "$projectDir\*.jsonl" -and -not $script:Streams.ContainsKey($created)) {
+            if ((Test-IsProjectJsonl $created) -and -not $script:Streams.ContainsKey($created)) {
                 Open-Stream $created -RuntimeDiscovery
                 Drain-Stream $created
             }

@@ -17,23 +17,23 @@ for Claude Code sessions. Operates across every `.jsonl` transcript under
 
 ## Invocation rules — read this BEFORE running any script
 
-This skill's scripts live under `~/.claude/skills/session-curator/scripts/`. Two rules govern how to invoke them. **Get either wrong and the call fails** (witnessed in smoke tests v1 and v2):
+This skill's scripts live under `~/.claude/skills/session-curator/scripts/` and are written for **PowerShell 7+ (`pwsh`)**, which runs on Windows, macOS, and Linux. Two rules govern how to invoke them. **Get either wrong and the call fails** (witnessed in smoke tests v1 and v2):
 
-### Rule 1: ALWAYS use the **PowerShell tool**, NEVER the Bash tool
+### Rule 1: run the scripts under `pwsh`, not a POSIX shell
 
-The scripts are `.ps1` files and rely on PowerShell-style environment variables. The **Bash tool** on Windows is Git Bash — it does NOT understand `$env:USERPROFILE` (it sees `$env` as an empty variable, leaving the literal string `:USERPROFILE\...` which fails with "argument not recognized as the name of a script file"). Use the **PowerShell tool** instead. Every invocation in this skill should go through PowerShell.
+The scripts are `.ps1` files. Invoke them with `pwsh -File <script>` — from the PowerShell tool if you have one, or via `pwsh -File ...` inside the Bash tool on a machine where `pwsh` is on PATH. Do NOT try to run a `.ps1` as a POSIX shell script; it will not parse.
 
-### Rule 2: Do NOT use `~` in the path argument
+### Rule 2: build the path from `$HOME`, not `~`, in the path argument
 
-PowerShell does NOT expand `~` inside string arguments to `pwsh -File` (only inside cmdlets like `Set-Location`). Use `$env:USERPROFILE` with Windows separators, double-quoted:
+`pwsh` does NOT expand `~` inside the string argument to `-File` (only inside cmdlets like `Set-Location`). Resolve the home directory yourself with `$HOME`, which `pwsh` populates on every OS. `pwsh` accepts forward slashes on all platforms, so a single forward-slash form works everywhere:
 
 ```powershell
-pwsh -File "$env:USERPROFILE\.claude\skills\session-curator\scripts\Extract-SessionIndex.ps1" -Days 21
+pwsh -File "$HOME/.claude/skills/session-curator/scripts/Extract-SessionIndex.ps1" -Days 21
 ```
 
-If `$env:USERPROFILE` for any reason fails (you accidentally invoked via Bash, or some other reason), the fallback is to resolve the absolute path from the home directory yourself — e.g. ``"$HOME/.claude/skills/session-curator/scripts/<script>.ps1"`` — rather than hardcoding a username. Use it only as a last resort.
+(On Windows you may also see `$env:USERPROFILE` used for the same purpose; `$HOME` is preferred here because it resolves identically on macOS and Linux.)
 
-Documentation and narrative file references elsewhere in this skill (e.g. "see `~/.claude/skills/session-curator/.session-index.json`") still use `~` for human readability — only the actual `pwsh -File ...` invocations need the `$env:USERPROFILE` form. The script bodies themselves resolve `$HOME` correctly; the issue is purely about the **path argument** passed to `pwsh -File` from outside.
+Documentation and narrative file references elsewhere in this skill (e.g. "see `~/.claude/skills/session-curator/.session-index.json`") still use `~` for human readability — only the actual `pwsh -File ...` invocations need the `$HOME` form. The script bodies themselves resolve `$HOME` correctly; the issue is purely about the **path argument** passed to `pwsh -File` from outside.
 
 ## Core principle: never load raw `.jsonl` into the main context
 
@@ -89,9 +89,9 @@ don't name the operation. Default to surveying when intent is unclear.
 
 1. **Ensure the index is fresh.** Read `_meta.generated` from `.session-index.json` FIRST — do not skip this check. Regenerate ONLY if missing or older than 5 minutes; otherwise reuse. Smoke test v2 caught a redundant regen on a 3-min-old index because this check was skipped. Quick check:
    ```powershell
-   $idx = "$env:USERPROFILE\.claude\skills\session-curator\.session-index.json"
+   $idx = "$HOME/.claude/skills/session-curator/.session-index.json"
    if (-not (Test-Path $idx) -or ((Get-Date) - (Get-Content $idx -Raw | ConvertFrom-Json)._meta.generated).TotalMinutes -gt 5) {
-       pwsh -File "$env:USERPROFILE\.claude\skills\session-curator\scripts\Extract-SessionIndex.ps1" -Days 21
+       pwsh -File "$HOME/.claude/skills/session-curator/scripts/Extract-SessionIndex.ps1" -Days 21
    }
    ```
    Use a wider window (`-Days 90`) only if the user explicitly asks for older sessions
@@ -172,13 +172,13 @@ don't name the operation. Default to surveying when intent is unclear.
    > - `where_stopped`: 5-10 words describing what was happening at the last
    >   timestamp — used by the user to remember what to pick up.
    > Return ONLY the JSON lines, no commentary.
-3. **Collect the subagent verdicts** into a single NDJSON file (one JSON line per session) at a temp path, e.g. `$env:TEMP\session-curator-verdicts.ndjson`. Do not improvise inline PowerShell formatters — that path led to `"Missing ')'"` errors in smoke test v1.
+3. **Collect the subagent verdicts** into a single NDJSON file (one JSON line per session) at a temp path, e.g. `(Join-Path ([System.IO.Path]::GetTempPath()) 'session-curator-verdicts.ndjson')` (cross-platform; `[System.IO.Path]::GetTempPath()` resolves the OS temp dir on Windows/macOS/Linux). Do not improvise inline PowerShell formatters — that path led to `"Missing ')'"` errors in smoke test v1.
 4. **Render the canonical markdown via the helper script** — do NOT improvise inline PowerShell to build the table:
    ```powershell
-   pwsh -File "$env:USERPROFILE\.claude\skills\session-curator\scripts\Format-SurveyMarkdown.ps1" `
-        -VerdictsFile "$env:TEMP\session-curator-verdicts.ndjson" `
+   pwsh -File "$HOME/.claude/skills/session-curator/scripts/Format-SurveyMarkdown.ps1" `
+        -VerdictsFile (Join-Path ([System.IO.Path]::GetTempPath()) 'session-curator-verdicts.ndjson') `
         -Window 21 `
-        -OutputFile "$env:USERPROFILE\.claude\skills\session-curator\.last-survey.md"
+        -OutputFile "$HOME/.claude/skills/session-curator/.last-survey.md"
    ```
    The helper produces the canonical scannable table (When | Project | Topic | Status — no resume column) followed by a "Resume commands" section where each session's command is a standalone fenced code block under its own description line, plus a per-project breakdown, status histogram, and an "open threads worth picking up" section (each with its resume command as a standalone code block). It writes the file AND prints a confirmation line. Read the file back if you need to surface a section into chat.
 5. Highlight any sessions in `duplicateGroups` with a "dup of {canonical}" marker when reporting in chat. The helper file already flags the duplicate-group count in its footer.
@@ -267,9 +267,10 @@ include a top YAML frontmatter with `generator`, `generated`, `window`,
    directive holds for the subagent too.
 4. **Render the proposal table via the helper script** — do NOT improvise inline `node -e` or PowerShell to build the table (smoke test v2 hit `${p.newTitle}` bash-substitution bugs and path-concat bugs going this route):
    ```powershell
-   pwsh -File "$env:USERPROFILE\.claude\skills\session-curator\scripts\Format-ProposalsTable.ps1" `
-        -CandidatesFile "$env:TEMP\session-curator-rename-candidates.json" `
-        -ProposalsFile  "$env:TEMP\session-curator-rename-proposals.json"
+   $tmp = [System.IO.Path]::GetTempPath()
+   pwsh -File "$HOME/.claude/skills/session-curator/scripts/Format-ProposalsTable.ps1" `
+        -CandidatesFile (Join-Path $tmp 'session-curator-rename-candidates.json') `
+        -ProposalsFile  (Join-Path $tmp 'session-curator-rename-proposals.json')
    ```
    The helper emits the markdown table (`When | Project | Proposed name | Conf | Mismatch | Reason`) plus a per-customer breakdown and YAML frontmatter. Highlight `Mismatch=Y` rows so the user can sanity check the customer inference.
 5. Ask: "Apply these N? (yes — direct write / show /rename commands instead /
@@ -482,10 +483,15 @@ in that other window".
    ```powershell
    Start-Process -FilePath pwsh -ArgumentList @(
      '-NoExit', '-NoProfile',
-     '-File', "$env:USERPROFILE\.claude\skills\session-curator\scripts\Watch-Session.ps1",
+     '-File', "$HOME/.claude/skills/session-curator/scripts/Watch-Session.ps1",
      '-SessionId', '<id>'
    ) -WindowStyle Normal
    ```
+   (This spawns a new desktop window and is Windows-first — see the cross-platform
+   note in [Launch mode](#launch-mode). On macOS/Linux, run
+   `pwsh -File ".../scripts/Watch-Session.ps1" -SessionId <id>` directly in a
+   terminal the user opens, or prefer the Monitor tool in step 5 which is
+   OS-agnostic.)
 
 8. **Richer UI alternatives** ([`references/monitoring.md`](references/monitoring.md))
    — claude-code-trace, tail-claude, disler's hook dashboard — only when
@@ -512,7 +518,7 @@ section.)
    confirms it lands in the current window (not a new one). Then open the rest.
 4. Invoke the bundled launcher (it reads cwd + title from the index by id/prefix):
    ```powershell
-   pwsh -File "$env:USERPROFILE\.claude\skills\session-curator\scripts\Open-Sessions.ps1" -Ids <id1>,<id2>,<id3>
+   pwsh -File "$HOME/.claude/skills/session-curator/scripts/Open-Sessions.ps1" -Ids <id1>,<id2>,<id3>
    ```
    Add `-DryRun` to print the `wt` calls without launching.
 
@@ -559,6 +565,17 @@ $wtArgs = @('-w','0','new-tab','--title','<title>','-d','<real folder path>',
 ```
 The clean fix (deferred 2026-06-23) is to have `Open-Sessions.ps1` / the index
 derive a `resumeCwd` from the project folder rather than the in-transcript `cwd`.
+
+**Cross-platform note (launch + monitor are Windows-first).** Tab-opening depends
+on Windows Terminal (`wt.exe`), and the Desktop-window monitor fallback uses
+`Start-Process`-style window spawning — both are Windows behaviours. On macOS/Linux
+(or a Windows box without Windows Terminal), `Open-Sessions.ps1` degrades
+gracefully: instead of opening tabs it **prints one `cd "<cwd>"; claude --resume
+<id>` line per session** for the user to paste into their own terminal/tabs. The
+core modes (survey, search, cleanup, rename, resume, continue-from, move) are fully
+cross-platform under `pwsh`; only the *tab/window orchestration* of launch and
+monitor is Windows-first. Native macOS/Linux launchers (tmux, iTerm, etc.) are a
+welcome contribution.
 
 ## Output conventions
 
@@ -620,7 +637,7 @@ No other files. The skill never scatters per-invocation logs, temp files, or
 sidecars. Every artifact self-describes (so any file this skill writes carries
 its own provenance and is safe to inspect or delete).
 
-**Hygiene rule — the skill dir is exclusively for the three files above.** Any other file that ends up in `~/.claude/skills/session-curator/` (e.g. `.slices/`, `.subagent-verdicts.ndjson`, intermediate scratch from a subagent's working set) is leftover and should be deleted at end-of-run. Subagent scratch files belong under `$env:TEMP\session-curator-*` (`%TEMP%` is wiped by Windows housekeeping; the skill dir is not). Smoke test v2 caught two stragglers from earlier iterations — both have since been removed.
+**Hygiene rule — the skill dir is exclusively for the three files above.** Any other file that ends up in `~/.claude/skills/session-curator/` (e.g. `.slices/`, `.subagent-verdicts.ndjson`, intermediate scratch from a subagent's working set) is leftover and should be deleted at end-of-run. Subagent scratch files belong under the OS temp dir (`[System.IO.Path]::GetTempPath()`, e.g. `session-curator-*` there) — the temp dir is housekept by the OS; the skill dir is not. Smoke test v2 caught two stragglers from earlier iterations — both have since been removed.
 
 ## Things this skill explicitly does NOT do
 

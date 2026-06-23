@@ -44,8 +44,8 @@
 param(
     [int]    $Days             = 21,
     [int]    $MinSizeKb        = 2,
-    [string] $ProjectsRoot     = (Join-Path $HOME '.claude\projects'),
-    [string] $OutputFile       = (Join-Path $HOME '.claude\skills\session-curator\.session-index.json'),
+    [string] $ProjectsRoot     = (Join-Path $HOME '.claude' 'projects'),
+    [string] $OutputFile       = (Join-Path $HOME '.claude' 'skills' 'session-curator' '.session-index.json'),
     [switch] $IncludeFullText
 )
 

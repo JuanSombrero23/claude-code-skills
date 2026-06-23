@@ -49,7 +49,7 @@
 
 [CmdletBinding()]
 param(
-    [string] $IndexFile    = (Join-Path $HOME '.claude\skills\session-curator\.session-index.json'),
+    [string] $IndexFile    = (Join-Path $HOME '.claude' 'skills' 'session-curator' '.session-index.json'),
     [string] $VerdictsFile = $null,
     [int]    $Window       = 0,
     [string] $OutputFile   = $null,

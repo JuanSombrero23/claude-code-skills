@@ -35,6 +35,14 @@
     .\Open-Sessions.ps1 -Ids <id> -DryRun           # print the wt calls, launch nothing
     .\Open-Sessions.ps1 -Ids <id> -Window 0         # target WT window (0 = current/MRU)
 
+  CROSS-PLATFORM
+    Opening tabs is a Windows Terminal feature (wt.exe). On macOS/Linux — or any
+    Windows box without Windows Terminal — wt.exe is absent. Rather than fail, the
+    script degrades gracefully: it PRINTS one `cd "<cwd>"; claude --resume <id>`
+    line per session for the user to paste into their own terminal/tabs. A native
+    macOS/Linux multiplexer launcher (tmux, iTerm, etc.) would be a welcome
+    contribution.
+
   CREATED
     2026-06-10. Part of session-curator. See SKILL.md "Launch mode".
 ================================================================================
@@ -42,15 +50,20 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string[]] $Ids,
-    [string] $IndexPath = (Join-Path $HOME '.claude\skills\session-curator\.session-index.json'),
+    [string] $IndexPath = (Join-Path $HOME '.claude' 'skills' 'session-curator' '.session-index.json'),
     [string] $Window    = '0',
     [switch] $DryRun
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Command wt.exe -ErrorAction SilentlyContinue)) {
-    throw "wt.exe (Windows Terminal) not found on PATH. Tabs need Windows Terminal; fall back to Start-Process for separate windows."
+# Windows Terminal is required for the tab-opening path. If it's absent (non-Windows,
+# or a Windows box without WT) we don't fail — we fall back to PRINTING the resume
+# commands for the user to run. See CROSS-PLATFORM in the header.
+$wtAvailable = [bool](Get-Command wt.exe -ErrorAction SilentlyContinue)
+if (-not $wtAvailable) {
+    Write-Host "wt.exe (Windows Terminal) not found — printing resume commands instead of opening tabs." -ForegroundColor Yellow
+    Write-Host ""
 }
 if (-not (Test-Path $IndexPath)) {
     throw "Session index not found at $IndexPath. Run Extract-SessionIndex.ps1 first."
@@ -72,6 +85,16 @@ foreach ($wanted in $Ids) {
 
     $title = if ($s.customTitle) { $s.customTitle } else { "session-$($s.id.Substring(0,[math]::Min(8,$s.id.Length)))" }
 
+    # No Windows Terminal: print the resume command for the user to paste. The cwd
+    # is double-quoted so paths with spaces survive.
+    if (-not $wtAvailable) {
+        $resume = if ($s.cwd) { "cd ""$($s.cwd)""; claude --resume $($s.id)" } else { "claude --resume $($s.id)" }
+        Write-Host "# $title" -ForegroundColor DarkGray
+        Write-Host $resume
+        $opened++
+        continue
+    }
+
     # Build argv as an array and splat — see HARD-WON INVOCATION DETAIL above.
     $wtArgs = @('-w', $Window, 'new-tab', '--title', $title)
     if ($s.cwd) { $wtArgs += @('-d', $s.cwd) }
@@ -88,5 +111,6 @@ foreach ($wanted in $Ids) {
 }
 
 Write-Host ""
-if ($DryRun) { Write-Host "Dry run — $($Ids.Count) session(s) would be opened." -ForegroundColor Cyan }
+if (-not $wtAvailable) { Write-Host "$opened resume command(s) printed, $($missing.Count) missing." -ForegroundColor Cyan }
+elseif ($DryRun) { Write-Host "Dry run — $($Ids.Count) session(s) would be opened." -ForegroundColor Cyan }
 else { Write-Host "$opened tab(s) opened, $($missing.Count) missing." -ForegroundColor Cyan }

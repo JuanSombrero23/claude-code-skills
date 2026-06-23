@@ -52,7 +52,7 @@ param(
     [switch] $Apply,
     [switch] $AllowRecent,
     [switch] $Force,
-    [string] $BackupRoot = (Join-Path $HOME ".claude\projects-backup\$(Get-Date -Format 'yyyy-MM-dd')")
+    [string] $BackupRoot = (Join-Path $HOME '.claude' 'projects-backup' (Get-Date -Format 'yyyy-MM-dd'))
 )
 
 $ErrorActionPreference = 'Stop'

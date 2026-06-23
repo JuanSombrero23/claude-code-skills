@@ -21,11 +21,12 @@
     -CandidatesFile <path>   Required. JSON array of candidate objects with
                              {id, file, cwd, mtime, userCount, sizeKb,
                               lastLineType, firstUser, lastUser, lastAssistant}.
-                             Typically $env:TEMP\session-curator-rename-candidates.json.
+                             Typically a temp file such as
+                             [System.IO.Path]::GetTempPath()/session-curator-rename-candidates.json.
     -ProposalsFile  <path>   Required. JSON array of proposal objects with
                              {id, file, newTitle, reasoning, cwdMismatch,
-                              confidence}. Typically
-                             $env:TEMP\session-curator-rename-proposals.json.
+                              confidence}. Typically a temp file such as
+                             [System.IO.Path]::GetTempPath()/session-curator-rename-proposals.json.
                              Accepts either a bare array or {proposals: [...]}
                              wrapper.
     -OutputFile     <path>   Optional. If supplied, writes the markdown to
@@ -81,7 +82,9 @@ function Format-When {
 function Get-ProjectFolder {
     param([string]$CandFile)
     if (-not $CandFile) { return '?' }
-    $parts = $CandFile -split '\\'
+    # Split on either separator so this works whether the path uses \ (Windows)
+    # or / (macOS/Linux).
+    $parts = $CandFile -split '[\\/]'
     $idx = [Array]::IndexOf($parts, 'projects')
     if ($idx -ge 0 -and $idx -lt $parts.Count - 1) { return $parts[$idx + 1] }
     return '?'
