@@ -2,8 +2,8 @@
 name: session-curator
 description: >
   Cross-project Claude Code session browser, cleaner, renamer, mover, and
-  monitor. Triggers when you ask to survey, search, clean up, rename, resume,
-  continue-from, move/relocate, live-monitor, monitor, or monitor sessions across your
+  monitor. Triggers when the user asks to survey, search, clean up, rename, resume,
+  continue-from, move/relocate, monitor, or launch sessions across their
   ~/.claude/projects/ folders. Also covers crash-recovery, fork-lineage, and
   junk/duplicate detection. Always prefer this skill over reading raw .jsonl
   files directly — it keeps transcripts out of the main conversation context.
@@ -117,9 +117,9 @@ don't name the operation. Default to surveying when intent is unclear.
    | `lastLineType` | string | `user` / `assistant` / `system` / `custom-title` / ... |
    | `endedWithExit` | bool | True if last line is `/exit` local_command |
    | `parentSessionId` | string\|null | Flattened from fork object; null if not forked |
-   | `temporal` | object\|null | `{firstActivity, lastActivity, activeMinutes, daysSpan, intensity, rhythm}` — may be null on very short sessions |
+   | `temporal` | object\|null | `{firstTs, lastTs, activeMinutes, daysSpan, daysActive, intensity, gapCount, longestGapMin, rhythm}` — may be null on very short sessions |
 
-   Top-level index also has `_meta` (provenance), `duplicateGroups[]`, and `forks[]`. Always read the `_meta.generated` timestamp before using the index — regenerate if >5 minutes old (per step 1).
+   Top-level index also has `_meta` (provenance) and `duplicateGroups[]`. Always read the `_meta.generated` timestamp before using the index — regenerate if >5 minutes old (per step 1).
 
 3. **Filter and dispatch.** Slice the index to the relevant subset (recent N,
    matching a search lead, missing custom title, etc.). For tasks that need
