@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "claude-code-skills",
+  "owner": {
+    "name": "JuanSombrero23",
+    "email": "juansombrero23@gmail.com"
+  },
+  "metadata": {
+    "description": "A growing collection of Claude Code skills, packaged as an installable marketplace.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "session-curator",
+      "source": "./plugins/session-curator",
+      "description": "Cross-project Claude Code session browser, cleaner, renamer, mover, and live monitor.",
+      "version": "0.1.0",
+      "category": "productivity",
+      "tags": ["sessions", "claude-code", "powershell", "cleanup", "productivity"]
+    }
+  ]
+}

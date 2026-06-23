@@ -1,0 +1,13 @@
+# --- session-curator runtime caches — NEVER commit ---
+# These are generated from your real sessions and can contain client-confidential
+# data (project names, cwds, verbatim prompts). They regenerate on first run.
+**/.session-index.json
+**/*.last-survey.md
+**/.session-*
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
