@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- README: two worked walkthroughs — crash recovery (survey + launch) and live cross-session monitoring (develop in one session, test in a second, monitor/audit from the first).
+
 ## [0.1.0] - 2026-06-24
 
 First public release.
